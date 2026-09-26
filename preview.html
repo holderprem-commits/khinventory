@@ -172,44 +172,668 @@ h1{margin:0;font-size:22px;letter-spacing:-.5px}
 <div class="toast" id="toast"></div>
 
 <script>
-const SERVER_DEFS=[
- {id:"server1",name:"Server 1",range:"1B - 100B"},
- {id:"server2",name:"Server 2",range:"101B - 200B"},
- {id:"server3",name:"Server 3",range:"201B - 500B"},
- {id:"server4",name:"Server 4",range:"501B+"}
+const STORAGE_KEY = "kyosh_account_inventory_v3";
+
+const SERVER_DEFS = [
+  {id:"server1", name:"Server 1", range:"1B - 100B", min:1e9, max:100e9},
+  {id:"server2", name:"Server 2", range:"101B - 200B", min:100e9, max:200e9},
+  {id:"server3", name:"Server 3", range:"201B - 500B", min:200e9, max:500e9},
+  {id:"server4", name:"Server 4", range:"501B+", min:500e9, max:Infinity}
 ];
-let state=[]; let editingId=null; let copyServerId=null; let refreshTimer=null;
-const UNITS={K:1e3,M:1e6,B:1e9,T:1e12,QA:1e15,QI:1e18};
-function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36)}
-function esc(v){return String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
-function parseAmount(v){const m=String(v||"").trim().replaceAll(",","").match(/^([0-9]+(?:\.[0-9]+)?)\s*(K|M|B|T|Qa|Qi)?$/i);if(!m)return NaN;return Number(m[1])*(UNITS[(m[2]||"").toUpperCase()]||1)}
-function getServerForAmount(v){if(!Number.isFinite(v)||v<1e9)return null;if(v<=100e9)return state.find(x=>x.id==="server1");if(v<=200e9)return state.find(x=>x.id==="server2");if(v<=500e9)return state.find(x=>x.id==="server3");return state.find(x=>x.id==="server4")}
-function formatAmount(v){if(!Number.isFinite(v))return "0";const units=[[1e18,"Qi"],[1e15,"Qa"],[1e12,"T"],[1e9,"B"],[1e6,"M"],[1e3,"K"]];for(const [n,u] of units){if(Math.abs(v)>=n){let x=v/n;return (Math.round(x*100)/100).toString()+u}}return Math.round(v).toString()}
-function sumServer(s){return s.accounts.reduce((a,x)=>a+(parseAmount(x.amount)||0),0)}
-function toast(msg){const e=document.getElementById("toast");e.textContent=msg;e.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>e.classList.remove("show"),2600)}
-async function api(url,opt={}){const r=await fetch(url,{headers:{"Content-Type":"application/json",...(opt.headers||{})},...opt});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||d.errors?.join("\n")||`HTTP ${r.status}`);return d}
-async function load(){try{state=await api("/api/accounts");render()}catch(e){toast("Database connection failed: "+e.message)}}
-function render(){const q=document.getElementById("search").value.trim().toLowerCase();let total=0,grand=0;for(const s of state){total+=s.accounts.length;grand+=sumServer(s)}document.getElementById("accountCount").textContent=total;document.getElementById("grandTotal").textContent=formatAmount(grand);document.getElementById("serverCount").textContent=state.length;document.getElementById("slotCount").textContent="∞";document.getElementById("servers").innerHTML=state.map(s=>{const visible=s.accounts.filter(a=>!q||a.username.toLowerCase().includes(q));return `<section class="server"><div class="server-head"><div><div class="server-title"><div class="server-name">${esc(s.name)}</div></div><div class="server-meta">${esc(s.range)} · ${s.accounts.length} account(s)</div></div><div class="server-total">${formatAmount(sumServer(s))}</div><div class="server-actions"><button class="btn" onclick="copyEverything('${s.id}')">📋 Copy Everything</button><button class="btn primary" onclick="addAccount()">＋ Add Account</button></div></div><div class="accounts">${visible.length?visible.map((a,i)=>accountHTML(s,a,i)).join(""):`<div class="empty">${q?"No matching accounts.":"No accounts in this server."}</div>`}</div></section>`}).join("")}
-function accountHTML(s,a,i){return `<div class="account"><div class="num">#${i+1}</div><div class="value">${esc(formatAmount(parseAmount(a.amount)))}</div><div class="cred"><div class="username">${esc(a.username)}</div><div class="password">${a._show?esc(a.password):"••••••••"}</div></div><div class="actions-small"><button class="small" onclick="togglePassword('${s.id}','${a.id}')">${a._show?"Hide":"Show"}</button><button class="small" onclick="copyAccount('${s.id}','${a.id}')">Copy</button><button class="small" onclick="editAccount('${s.id}','${a.id}')">Edit</button><button class="small red" onclick="removeAccount('${s.id}','${a.id}')">Remove</button></div></div>`}
-function openModal(title,body){document.getElementById("modalTitle").textContent=title;document.getElementById("modalBody").innerHTML=body;document.getElementById("modal").classList.add("open")}
-function closeModal(){document.getElementById("modal").classList.remove("open");editingId=null}
-function amountPreview(){const input=document.getElementById("amount"),box=document.getElementById("rangePreview");if(!input||!box)return;const s=getServerForAmount(parseAmount(input.value));if(!input.value.trim())box.innerHTML="Enter an amount to automatically determine the server.";else if(!s)box.innerHTML='<span style="color:#ff8585">Amount must be at least 1B.</span>';else box.innerHTML=`Automatically assigned to <b>${esc(s.name)}</b> <span style="color:#707785">(${esc(s.range)})</span>`}
-function addAccount(){editingId=null;openModal("Add Account",`<div class="field"><label>AMOUNT / GAME VALUE</label><input id="amount" placeholder="Example: 25B" oninput="amountPreview()"><div class="range-box" id="rangePreview">Enter an amount to automatically determine the server.</div></div><div class="field"><label>USERNAME</label><input id="username" placeholder="Roblox username"></div><div class="field"><label>PASSWORD</label><input id="password" type="password" placeholder="Password"></div><div class="help">Accepted units: K, M, B, T, Qa, Qi. Server ranges: 1B–100B, 101B–200B, 201B–500B, 501B+.</div><div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveNewAccount()">Add Account</button></div>`);setTimeout(()=>document.getElementById("amount")?.focus(),50)}
-async function saveNewAccount(){const amount=document.getElementById("amount").value.trim(),username=document.getElementById("username").value.trim(),password=document.getElementById("password").value;if(!Number.isFinite(parseAmount(amount))||parseAmount(amount)<1e9)return toast("Account value must be at least 1B.");if(!username||!password)return toast("Username and password are required.");try{await api("/api/accounts",{method:"POST",body:JSON.stringify({amount,username,password})});closeModal();await load();toast(`${username} added.`)}catch(e){toast(e.message)}}
-function editAccount(sid,id){const s=state.find(x=>x.id===sid),a=s?.accounts.find(x=>x.id===id);if(!a)return;editingId=id;openModal("Edit Account",`<div class="field"><label>AMOUNT / GAME VALUE</label><input id="amount" value="${esc(a.amount)}" oninput="amountPreview()"><div class="range-box" id="rangePreview">Current server: <b>${esc(s.name)}</b> (${esc(s.range)})</div></div><div class="field"><label>USERNAME</label><input id="username" value="${esc(a.username)}"></div><div class="field"><label>PASSWORD</label><input id="password" type="password" value="${esc(a.password)}"></div><div class="help">Changing the amount automatically moves the account to the correct server.</div><div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveAccountChanges()">Save Changes</button></div>`);setTimeout(amountPreview,50)}
-async function saveAccountChanges(){const amount=document.getElementById("amount").value.trim(),username=document.getElementById("username").value.trim(),password=document.getElementById("password").value;if(!Number.isFinite(parseAmount(amount))||parseAmount(amount)<1e9)return toast("Account value must be at least 1B.");if(!username||!password)return toast("Username and password are required.");try{await api(`/api/accounts/${editingId}`,{method:"PUT",body:JSON.stringify({amount,username,password})});closeModal();await load();toast("Account updated.")}catch(e){toast(e.message)}}
-async function removeAccount(sid,id){const s=state.find(x=>x.id===sid),a=s?.accounts.find(x=>x.id===id);if(!a||!confirm(`Remove ${a.username}?`))return;try{await api(`/api/accounts/${id}`,{method:"DELETE"});await load();toast("Account removed.")}catch(e){toast(e.message)}}
-function togglePassword(sid,id){const a=state.find(x=>x.id===sid)?.accounts.find(x=>x.id===id);if(a){a._show=!a._show;render()}}
-async function copyText(t){try{await navigator.clipboard.writeText(t)}catch{const x=document.createElement("textarea");x.value=t;document.body.appendChild(x);x.select();document.execCommand("copy");x.remove()}toast("Copied to clipboard.")}
-function accountLine(a){return `(${formatAmount(parseAmount(a.amount))}) ${a.username}:${a.password}`}
-function copyAccount(sid,id){const a=state.find(x=>x.id===sid)?.accounts.find(x=>x.id===id);if(a)copyText(accountLine(a))}
-function copyEverything(sid){const s=state.find(x=>x.id===sid);if(!s||!s.accounts.length)return toast("This server has no accounts.");copyServerId=sid;const text=s.accounts.map(accountLine).join("\n");openModal(`Copy Everything — ${s.name}`,`<div class="copybox"><div class="copy-preview">${esc(text)}</div><div class="form-actions"><button class="btn" onclick="closeModal()">Close</button><button class="btn primary" onclick="copyServerNow()">📋 Copy Everything</button></div></div>`)}
-function copyServerNow(){const s=state.find(x=>x.id===copyServerId);if(s)copyText(s.accounts.map(accountLine).join("\n"));closeModal()}
-function importData(){openModal("Import Accounts",`<div class="field"><label>DISCORD MESSAGE / ACCOUNT LINES</label><textarea id="importText" placeholder="(145B) user1:pass1 (114B) user2:pass2 (183B) user3:pass3\n\nOr one account per line."></textarea></div><div class="help">Supports multiple accounts on one Discord message. Format: (amount) username:password. Any malformed leftover text is rejected and reported.</div><div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="runImport()">Import Accounts</button></div>`)}
-async function runImport(){const text=document.getElementById("importText").value.trim();if(!text)return toast("Enter at least one account.");const re=/\(([^)]+)\)\s+([^\s:]+):([^\s]+)(?=\s+\(|$)/g;const matches=[...text.matchAll(re)];if(!matches.length)return toast("No valid account entries found.");let covered=Array(text.length).fill(false);for(const m of matches)for(let i=m.index;i<m.index+m[0].length;i++)covered[i]=true;const leftovers=text.split("").map((c,i)=>covered[i]?" ":c).join("").replace(/\s+/g," ").trim();if(leftovers)return toast("Invalid/unrecognized text: "+leftovers.slice(0,180));for(const m of matches){if(!Number.isFinite(parseAmount(m[1]))||parseAmount(m[1])<1e9)return toast(`${m[2]}: amount must be at least 1B.`)}try{for(const m of matches)await api("/api/accounts",{method:"POST",body:JSON.stringify({amount:m[1].trim(),username:m[2].trim(),password:m[3].trim()})});closeModal();await load();toast(`${matches.length} account(s) imported and sorted automatically.`)}catch(e){toast(e.message)}}
-document.getElementById("search").addEventListener("input",render);document.getElementById("modal").addEventListener("click",e=>{if(e.target.id==="modal")closeModal()});
-load();refreshTimer=setInterval(load,5000);
-</script>
+
+let state = load();
+let modalAction = null;
+let copyServerId = null;
+let editingAccount = null;
+
+function uid(){
+  return Math.random().toString(36).slice(2,8) + Date.now().toString(36).slice(-4);
+}
+
+function emptyServers(){
+  return SERVER_DEFS.map(d => ({
+    id:d.id,
+    name:d.name,
+    range:d.range,
+    accounts:[]
+  }));
+}
+
+function load(){
+  try{
+    const x = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if(Array.isArray(x) && x.length){
+      return normalizeState(x);
+    }
+
+    // Migrate the previous version that used manually-created servers.
+    const old = JSON.parse(localStorage.getItem("kyosh_account_inventory_v2"));
+    if(Array.isArray(old)){
+      return normalizeState(old);
+    }
+  }catch(e){}
+  return emptyServers();
+}
+
+function normalizeState(source){
+  const servers = emptyServers();
+  const allAccounts = [];
+
+  for(const server of Array.isArray(source) ? source : []){
+    if(Array.isArray(server.accounts)){
+      allAccounts.push(...server.accounts);
+    }
+  }
+
+  for(const account of allAccounts){
+    const value = parseAmount(account.amount);
+    const target = getServerForAmount(value);
+    if(target){
+      target.accounts.push({
+        id:account.id || uid(),
+        amount:String(account.amount ?? ""),
+        username:String(account.username ?? ""),
+        password:String(account.password ?? ""),
+        _show:false
+      });
+    }
+  }
+
+  return servers;
+}
+
+function save(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function esc(v){
+  return String(v ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+}
+
+function parseAmount(value){
+  if(typeof value === "number" && Number.isFinite(value)) return value;
+
+  let s = String(value ?? "").trim().replaceAll(",","");
+  if(!s) return 0;
+
+  const m = s.match(/^(-?[\d.]+)\s*(K|M|B|T|QA|QI)?$/i);
+  if(!m) return Number(s) || 0;
+
+  const n = Number(m[1]);
+  const unit = (m[2] || "").toUpperCase();
+  const mult = {
+    K:1e3,
+    M:1e6,
+    B:1e9,
+    T:1e12,
+    QA:1e15,
+    QI:1e18
+  };
+
+  return n * (mult[unit] || 1);
+}
+
+function formatAmount(n){
+  n = Number(n) || 0;
+
+  const units = [
+    [1e18,"Qi"],
+    [1e15,"Qa"],
+    [1e12,"T"],
+    [1e9,"B"],
+    [1e6,"M"],
+    [1e3,"K"]
+  ];
+
+  for(const [d,u] of units){
+    if(Math.abs(n) >= d){
+      let v = n / d;
+      let text = v >= 100
+        ? v.toFixed(0)
+        : v.toFixed(2).replace(/\.00$/,"").replace(/(\.\d)0$/,"$1");
+      return text + u;
+    }
+  }
+
+  return Math.round(n).toLocaleString();
+}
+
+function getServerForAmount(amount){
+  const n = parseAmount(amount);
+  if(!Number.isFinite(n) || n < 1e9) return null;
+
+  // Boundaries:
+  // 1B through 100B       -> Server 1
+  // above 100B through 200B -> Server 2
+  // above 200B through 500B -> Server 3
+  // above 500B             -> Server 4
+  if(n <= 100e9) return state.find(s=>s.id==="server1") || null;
+  if(n <= 200e9) return state.find(s=>s.id==="server2") || null;
+  if(n <= 500e9) return state.find(s=>s.id==="server3") || null;
+  return state.find(s=>s.id==="server4") || null;
+}
+
+function getServerDefinition(id){
+  return SERVER_DEFS.find(s=>s.id===id);
+}
+
+function serverTotal(server){
+  return server.accounts.reduce((sum,a)=>sum+parseAmount(a.amount),0);
+}
+
+function totalAccounts(){
+  return state.reduce((n,s)=>n+s.accounts.length,0);
+}
+
+function filtered(name){
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  if(!q) return true;
+  return name.toLowerCase().includes(q);
+}
+
+function render(){
+  const total = totalAccounts();
+  const slots = "∞";
+
+  document.getElementById("serverCount").textContent = state.length;
+  document.getElementById("accountCount").textContent = total;
+  document.getElementById("slotCount").textContent = "∞";
+  document.getElementById("grandTotal").textContent =
+    formatAmount(state.reduce((n,s)=>n+serverTotal(s),0));
+
+  const root = document.getElementById("servers");
+
+  root.innerHTML = state.map(server=>{
+    const visible = server.accounts.filter(a=>filtered(a.username));
+
+    const rows = visible.length ? visible.map(a=>{
+      const index = server.accounts.indexOf(a)+1;
+      const shown = a._show === true;
+
+      return `
+        <div class="account">
+          <div class="num">#${String(index).padStart(2,"0")}</div>
+
+          <div class="cred">
+            <div class="username">${esc(a.username)}</div>
+            <div class="password">${shown ? esc(a.password) : "••••••••••"}</div>
+          </div>
+
+          <div class="value">${formatAmount(a.amount)}</div>
+
+          <div class="password">
+            ${shown ? "Password visible" : "Password hidden"}
+          </div>
+
+          <div class="actions-small">
+            <button class="small" onclick="togglePassword('${server.id}','${a.id}')">
+              ${shown ? "Hide" : "Show"}
+            </button>
+            <button class="small" onclick="editAccount('${server.id}','${a.id}')">Edit</button>
+            <button class="small" onclick="copyAccount('${server.id}','${a.id}')">Copy</button>
+            <button class="small red" onclick="removeAccount('${server.id}','${a.id}')">Remove</button>
+          </div>
+        </div>`;
+    }).join("") :
+    `<div class="empty">${
+      document.getElementById("search").value
+        ? "No matching accounts."
+        : "No accounts in this server."
+    }</div>`;
+
+    const full = false;
+
+    return `
+      <section class="server">
+        <div class="server-head">
+          <div class="server-title">
+            <div>
+              <div class="server-name">${esc(server.name)}</div>
+              <div class="server-meta">
+                ${esc(server.range)} · ${server.accounts.length} accounts · Unlimited
+              </div>
+            </div>
+          </div>
+
+          <div class="server-total">
+            Total Value: ${formatAmount(serverTotal(server))}
+          </div>
+
+          <div class="server-actions">
+            <button class="btn primary" ${full?"disabled":""} onclick="addAccount()">
+              ＋ Account
+            </button>
+
+            <button class="btn" onclick="copyEverything('${server.id}')">
+              📋 Copy Everything
+            </button>
+          </div>
+        </div>
+
+        <div class="accounts">${rows}</div>
+
+        <div class="add-row">
+          <div class="capacity">
+            Server total: <b>${formatAmount(serverTotal(server))}</b>
+          </div>
+
+          <button class="btn" ${full?"disabled":""} onclick="addAccount()">
+            ＋ Add Account
+          </button>
+        </div>
+      </section>`;
+  }).join("");
+}
+
+function openModal(title,body){
+  document.getElementById("modalTitle").textContent=title;
+  document.getElementById("modalBody").innerHTML=body;
+  document.getElementById("modal").classList.add("open");
+}
+
+function closeModal(){
+  document.getElementById("modal").classList.remove("open");
+  modalAction=null;
+  editingAccount=null;
+}
+
+function amountPreview(){
+  const input = document.getElementById("amount");
+  const box = document.getElementById("rangePreview");
+  if(!input || !box) return;
+
+  const value = parseAmount(input.value);
+  const server = getServerForAmount(value);
+
+  if(!input.value.trim()){
+    box.innerHTML = "Enter an amount to automatically determine the server.";
+    return;
+  }
+
+  if(!server){
+    box.innerHTML = `<span style="color:#ff8585">Amount must be at least 1B.</span>`;
+    return;
+  }
+
+  if(server.accounts.length >= MAX_PER_SERVER && (!editingAccount || editingAccount.serverId !== server.id)){
+    box.innerHTML =
+      `<span style="color:#ff8585">${esc(server.name)} is full (20/20).</span>
+       <br><span style="color:#707785">This amount belongs to the ${esc(server.range)} range.</span>`;
+    return;
+  }
+
+  box.innerHTML =
+    `Automatically assigned to <b>${esc(server.name)}</b>
+     <span style="color:#707785">(${esc(server.range)})</span>`;
+}
+
+function addAccount(){
+  editingAccount=null;
+
+  openModal("Add Account",`
+    <div class="field">
+      <label>AMOUNT / GAME VALUE</label>
+      <input id="amount" placeholder="Example: 25B" oninput="amountPreview()">
+      <div class="range-box" id="rangePreview">
+        Enter an amount to automatically determine the server.
+      </div>
+    </div>
+
+    <div class="field">
+      <label>USERNAME</label>
+      <input id="username" placeholder="Roblox username">
+    </div>
+
+    <div class="field">
+      <label>PASSWORD</label>
+      <input id="password" type="password" placeholder="Password">
+    </div>
+
+    <div class="help">
+      Accepted amount units: K, M, B, T, Qa, Qi.
+      Server ranges: 1B–100B, 101B–200B, 201B–500B, 501B+.
+    </div>
+
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="saveNewAccount()">Add Account</button>
+    </div>`);
+
+  setTimeout(()=>document.getElementById("amount")?.focus(),50);
+}
+
+function saveNewAccount(){
+  const amount=document.getElementById("amount").value.trim();
+  const username=document.getElementById("username").value.trim();
+  const password=document.getElementById("password").value;
+
+  const value=parseAmount(amount);
+  const server=getServerForAmount(value);
+
+  if(!Number.isFinite(value) || value < 1e9){
+    return toast("Account value must be at least 1B.");
+  }
+
+  if(!username || !password){
+    return toast("Username and password are required.");
+  }
+
+  if(!server){
+    return toast("Could not determine the server.");
+  }
+
+    server.accounts.push({
+    id:uid(),
+    amount,
+    username,
+    password,
+    _show:false
+  });
+
+  save();
+  render();
+  closeModal();
+  toast(`${username} added to ${server.name}.`);
+}
+
+function editAccount(serverId,accountId){
+  const s=state.find(x=>x.id===serverId);
+  const a=s?.accounts.find(x=>x.id===accountId);
+
+  if(!a)return;
+
+  editingAccount={serverId,accountId};
+
+  openModal("Edit Account",`
+    <div class="field">
+      <label>AMOUNT / GAME VALUE</label>
+      <input id="amount" value="${esc(a.amount)}" oninput="amountPreview()">
+      <div class="range-box" id="rangePreview">
+        Current server: <b>${esc(s.name)}</b> (${esc(s.range)})
+      </div>
+    </div>
+
+    <div class="field">
+      <label>USERNAME</label>
+      <input id="username" value="${esc(a.username)}">
+    </div>
+
+    <div class="field">
+      <label>PASSWORD</label>
+      <input id="password" type="password" value="${esc(a.password)}">
+    </div>
+
+    <div class="help">
+      Changing the amount can automatically move this account to another server.
+    </div>
+
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="saveAccountChanges('${serverId}','${accountId}')">
+        Save Changes
+      </button>
+    </div>`);
+
+  setTimeout(()=>amountPreview(),50);
+}
+
+function saveAccountChanges(serverId,accountId){
+  const oldServer=state.find(x=>x.id===serverId);
+  const account=oldServer?.accounts.find(x=>x.id===accountId);
+
+  if(!account)return;
+
+  const amount=document.getElementById("amount").value.trim();
+  const username=document.getElementById("username").value.trim();
+  const password=document.getElementById("password").value;
+
+  const value=parseAmount(amount);
+  const target=getServerForAmount(value);
+
+  if(!Number.isFinite(value) || value < 1e9){
+    return toast("Account value must be at least 1B.");
+  }
+
+  if(!username || !password){
+    return toast("Username and password are required.");
+  }
+
+  if(!target){
+    return toast("Could not determine the server.");
+  }
+
+  // If it stays in the same server, simply update it.
+  if(target.id === oldServer.id){
+    Object.assign(account,{amount,username,password});
+    save();
+    render();
+    closeModal();
+    toast("Account updated.");
+    return;
+  }
+
+  // Moving to another range.
+    oldServer.accounts=oldServer.accounts.filter(x=>x.id!==accountId);
+
+  account.amount=amount;
+  account.username=username;
+  account.password=password;
+  account._show=false;
+
+  target.accounts.push(account);
+
+  save();
+  render();
+  closeModal();
+  toast(`Account moved to ${target.name}.`);
+}
+
+function removeAccount(serverId,accountId){
+  const s=state.find(x=>x.id===serverId);
+  if(!s)return;
+
+  const a=s.accounts.find(x=>x.id===accountId);
+  if(!a)return;
+
+  if(!confirm(`Remove ${a.username} from ${s.name}?`))return;
+
+  s.accounts=s.accounts.filter(x=>x.id!==accountId);
+  save();
+  render();
+  toast("Account removed.");
+}
+
+function togglePassword(serverId,accountId){
+  const s=state.find(x=>x.id===serverId);
+  const a=s?.accounts.find(x=>x.id===accountId);
+
+  if(a){
+    a._show=!a._show;
+    render();
+  }
+}
+
+async function copyText(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    toast("Copied to clipboard.");
+  }catch(e){
+    const ta=document.createElement("textarea");
+    ta.value=text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+    toast("Copied to clipboard.");
+  }
+}
+
+function accountLine(a){
+  return `(${formatAmount(parseAmount(a.amount))}) ${a.username}:${a.password}`;
+}
+
+function copyAccount(serverId,accountId){
+  const s=state.find(x=>x.id===serverId);
+  const a=s?.accounts.find(x=>x.id===accountId);
+
+  if(a)copyText(accountLine(a));
+}
+
+function copyEverything(serverId){
+  const s=state.find(x=>x.id===serverId);
+
+  if(!s)return;
+  if(!s.accounts.length)return toast("This server has no accounts.");
+
+  copyServerId=serverId;
+
+  const text=s.accounts.map(accountLine).join("\n");
+
+  openModal(`Copy Everything — ${s.name}`,`
+    <div class="copybox">
+      <div class="help" style="margin-bottom:10px">
+        This copies only the accounts in ${esc(s.name)}, one account per line.
+      </div>
+
+      <div class="copy-preview">${esc(text)}</div>
+
+      <div class="form-actions">
+        <button class="btn" onclick="closeModal()">Close</button>
+        <button class="btn primary" onclick="copyServerNow()">
+          📋 Copy Everything
+        </button>
+      </div>
+    </div>`);
+}
+
+function copyServerNow(){
+  const s=state.find(x=>x.id===copyServerId);
+  if(!s)return;
+
+  copyText(s.accounts.map(accountLine).join("\n"));
+  closeModal();
+}
+
+function importData(){
+  openModal("Import Accounts",`
+    <div class="field">
+      <label>ACCOUNT LINES</label>
+      <textarea id="importText" placeholder="(25B) username:password
+(150B) username2:password2
+(350B) username3:password3
+(750B) username4:password4"></textarea>
+    </div>
+
+    <div class="help">
+      Format: (amount) username:password.
+      Accounts are automatically placed into the correct server based on amount.
+      Each server can contain unlimited accounts.
+    </div>
+
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="runImport()">Import Accounts</button>
+    </div>`);
+}
+
+function runImport(){
+  const text=document.getElementById("importText").value;
+
+  const lines=text.split(/\r?\n/)
+    .map(x=>x.trim())
+    .filter(Boolean);
+
+  if(!lines.length){
+    return toast("Enter at least one account.");
+  }
+
+  const parsed=[];
+  const needed={
+    server1:0,
+    server2:0,
+    server3:0,
+    server4:0
+  };
+
+  for(const line of lines){
+    const m=line.match(/^\(([^)]+)\)\s+([^:\s]+):(.+)$/);
+
+    if(!m){
+      return toast(`Invalid format: ${line}`);
+    }
+
+    const amount=m[1].trim();
+    const username=m[2].trim();
+    const password=m[3];
+
+    const value=parseAmount(amount);
+    const server=getServerForAmount(value);
+
+    if(!Number.isFinite(value) || value < 1e9){
+      return toast(`${username}: amount must be at least 1B.`);
+    }
+
+    if(!server){
+      return toast(`${username}: could not determine server.`);
+    }
+
+    needed[server.id]++;
+
+    parsed.push({
+      id:uid(),
+      amount,
+      username,
+      password,
+      serverId:server.id
+    });
+  }
+
+  for(const server of state){
+    const count=needed[server.id] || 0;
+
+  }
+
+  for(const item of parsed){
+    const server=state.find(s=>s.id===item.serverId);
+
+    server.accounts.push({
+      id:item.id,
+      amount:item.amount,
+      username:item.username,
+      password:item.password,
+      _show:false
+    });
+  }
+
+  save();
+  render();
+  closeModal();
+  toast(`${parsed.length} account(s) imported and sorted automatically.`);
+}
+
+function toast(message){
+  const el=document.getElementById("toast");
+  el.textContent=message;
+  el.classList.add("show");
+
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer=setTimeout(()=>{
+    el.classList.remove("show");
+  },2400);
+}
+
+document.getElementById("search").addEventListener("input",render);
+
+document.getElementById("modal").addEventListener("click",e=>{
+  if(e.target.id==="modal")closeModal();
+});
+
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape")closeModal();
+});
+
+render();
 </script>
 </body>
 </html>
