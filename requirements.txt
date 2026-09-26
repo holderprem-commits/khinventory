@@ -1,0 +1,5 @@
+Flask
+Gunicorn
+psycopg2-binary
+discord.py
+aiohttp

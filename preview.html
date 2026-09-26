@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kyosh Account Inventory</title>
+<style>
+:root{
+  --bg:#08090c;--panel:#101216;--panel2:#14161b;--line:#242730;
+  --text:#f4f5f7;--muted:#858a96;--green:#24d36b;--orange:#f2a33a;
+  --red:#ff5252;--blue:#6ea8fe;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;min-height:100vh;background:
+  radial-gradient(circle at top right,rgba(40,45,65,.28),transparent 35%),var(--bg);
+  color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+button,input,textarea{font:inherit}
+button{cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
+.wrapper{width:min(1450px,94%);margin:auto;padding:30px 0 45px}
+.header{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:24px}
+.brand{display:flex;align-items:center;gap:13px}
+.logo{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:#171923;border:1px solid #2a2d38;font-size:19px;font-weight:900}
+h1{margin:0;font-size:22px;letter-spacing:-.5px}
+.subtitle{color:var(--muted);font-size:13px;margin-top:3px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{
+  border:1px solid #303541;background:#171a21;color:#dfe2e8;border-radius:9px;
+  padding:9px 13px;font-weight:700;font-size:12px
+}
+.btn:hover{background:#20242d;border-color:#454b59}
+.btn.primary{background:#1b6f43;border-color:#2a9a5e;color:#fff}
+.btn.primary:hover{background:#21844f}
+.btn.danger{color:#ff8585;border-color:#552b31}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px 19px}
+.stat-label{color:var(--muted);font-size:11px;margin-bottom:7px;font-weight:700;letter-spacing:.6px}
+.stat-value{font-size:24px;font-weight:800}
+.server{
+  background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  overflow:hidden;margin-bottom:14px;box-shadow:0 18px 50px rgba(0,0,0,.18)
+}
+.server-head{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:16px 18px;border-bottom:1px solid var(--line)}
+.server-title{display:flex;align-items:center;gap:12px;min-width:0}
+.server-name{font-size:15px;font-weight:800}
+.server-meta{font-size:11px;color:var(--muted);margin-top:3px}
+.server-total{font-size:18px;font-weight:800;color:var(--orange);white-space:nowrap}
+.server-actions{display:flex;gap:7px;flex-wrap:wrap}
+.server-actions .btn{padding:7px 10px}
+.accounts{padding:8px 12px 12px}
+.account{
+  display:grid;grid-template-columns:55px minmax(100px,1fr) 145px 190px auto;
+  gap:10px;align-items:center;padding:11px 8px;border-bottom:1px solid #1e2128
+}
+.account:last-child{border-bottom:0}
+.account:hover{background:#15181e}
+.num{color:#6e7480;font-size:11px;font-weight:800}
+.value{font-weight:800;color:#e7e9ed}
+.cred{min-width:0}
+.username{font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.password{font-size:11px;color:#707785;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.actions-small{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.small{
+  border:1px solid #2c303a;background:#171a20;color:#cfd3db;border-radius:7px;
+  padding:6px 8px;font-size:10px;font-weight:700
+}
+.small:hover{background:#20242c}
+.small.red{color:#ff8585}
+.empty{padding:35px 15px;text-align:center;color:var(--muted);font-size:12px}
+.add-row{padding:12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px}
+.capacity{font-size:11px;color:var(--muted)}
+.search{
+  width:280px;max-width:100%;border:1px solid #2c3039;background:#11141a;color:#fff;
+  border-radius:9px;padding:9px 11px;outline:none
+}
+.search:focus{border-color:#555d6b}
+.modal{
+  position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;
+  padding:20px;background:rgba(0,0,0,.74);backdrop-filter:blur(6px)
+}
+.modal.open{display:flex}
+.card{
+  width:min(600px,96vw);max-height:90vh;overflow:auto;background:#101216;
+  border:1px solid #2a2e38;border-radius:16px;box-shadow:0 30px 90px rgba(0,0,0,.55)
+}
+.modal-head{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid var(--line)}
+.modal-title{font-size:16px;font-weight:800}
+.close{width:34px;height:34px;border-radius:9px;border:1px solid #303541;background:#171a21;color:#fff;font-size:18px}
+.form{padding:18px}
+.field{margin-bottom:13px}
+.field label{display:block;color:#9298a4;font-size:11px;font-weight:700;margin-bottom:6px}
+.field input,.field textarea{
+  width:100%;border:1px solid #2c3039;background:#0d1015;color:#fff;border-radius:9px;
+  padding:10px 11px;outline:none
+}
+.field textarea{min-height:180px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}
+.field input:focus,.field textarea:focus{border-color:#596170}
+.form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.help{color:#707785;font-size:10px;line-height:1.5;margin-top:6px}
+.range-box{
+  background:#0b0d11;border:1px solid #252933;border-radius:10px;padding:11px 12px;
+  color:#dfe2e8;font-size:12px;margin-top:8px
+}
+.range-box b{color:var(--orange)}
+.copybox{padding:16px 18px}
+.copy-preview{
+  background:#0b0d11;border:1px solid #252933;border-radius:10px;padding:12px;
+  white-space:pre-wrap;word-break:break-word;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;
+  max-height:50vh;overflow:auto;color:#dfe2e8
+}
+.toast{
+  position:fixed;right:20px;bottom:20px;z-index:2000;background:#171a21;border:1px solid #363b47;
+  color:#fff;border-radius:10px;padding:10px 13px;font-size:12px;box-shadow:0 12px 35px rgba(0,0,0,.35);
+  opacity:0;transform:translateY(8px);pointer-events:none;transition:.2s
+}
+.toast.show{opacity:1;transform:translateY(0)}
+@media(max-width:900px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .account{grid-template-columns:35px minmax(90px,1fr) 90px}
+  .account .password,.account .actions-small{grid-column:2/-1}
+}
+@media(max-width:650px){
+  .wrapper{width:96%;padding-top:20px}
+  .header{align-items:flex-start;flex-direction:column}
+  .stats{grid-template-columns:1fr 1fr}
+  .server-head{align-items:flex-start;flex-direction:column}
+  .server-actions{width:100%}
+  .server-actions .btn{flex:1}
+  .account{grid-template-columns:30px 1fr 75px}
+}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <div class="brand">
+      <div class="logo">KI</div>
+      <div>
+        <h1>KYOSH ACCOUNT INVENTORY</h1>
+        <div class="subtitle">Automatic account sorting by value · Unlimited accounts</div>
+      </div>
+    </div>
+    <div class="actions">
+      <input id="search" class="search" placeholder="Search username...">
+      <button class="btn primary" onclick="addAccount()">＋ Add Account</button>
+      <button class="btn" onclick="importData()">Import</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-label">SERVERS</div><div class="stat-value" id="serverCount">4</div></div>
+    <div class="stat"><div class="stat-label">TOTAL ACCOUNTS</div><div class="stat-value" id="accountCount">0</div></div>
+    <div class="stat"><div class="stat-label">ACCOUNT CAPACITY</div><div class="stat-value" id="slotCount">∞</div></div>
+    <div class="stat"><div class="stat-label">TOTAL VALUE</div><div class="stat-value" id="grandTotal">0</div></div>
+  </div>
+
+  <div id="servers"></div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="card" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div class="modal-title" id="modalTitle">Add Account</div>
+      <button class="close" onclick="closeModal()">×</button>
+    </div>
+    <div class="form" id="modalBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SERVER_DEFS=[
+ {id:"server1",name:"Server 1",range:"1B - 100B"},
+ {id:"server2",name:"Server 2",range:"101B - 200B"},
+ {id:"server3",name:"Server 3",range:"201B - 500B"},
+ {id:"server4",name:"Server 4",range:"501B+"}
+];
+let state=[]; let editingId=null; let copyServerId=null; let refreshTimer=null;
+const UNITS={K:1e3,M:1e6,B:1e9,T:1e12,QA:1e15,QI:1e18};
+function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36)}
+function esc(v){return String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
+function parseAmount(v){const m=String(v||"").trim().replaceAll(",","").match(/^([0-9]+(?:\.[0-9]+)?)\s*(K|M|B|T|Qa|Qi)?$/i);if(!m)return NaN;return Number(m[1])*(UNITS[(m[2]||"").toUpperCase()]||1)}
+function getServerForAmount(v){if(!Number.isFinite(v)||v<1e9)return null;if(v<=100e9)return state.find(x=>x.id==="server1");if(v<=200e9)return state.find(x=>x.id==="server2");if(v<=500e9)return state.find(x=>x.id==="server3");return state.find(x=>x.id==="server4")}
+function formatAmount(v){if(!Number.isFinite(v))return "0";const units=[[1e18,"Qi"],[1e15,"Qa"],[1e12,"T"],[1e9,"B"],[1e6,"M"],[1e3,"K"]];for(const [n,u] of units){if(Math.abs(v)>=n){let x=v/n;return (Math.round(x*100)/100).toString()+u}}return Math.round(v).toString()}
+function sumServer(s){return s.accounts.reduce((a,x)=>a+(parseAmount(x.amount)||0),0)}
+function toast(msg){const e=document.getElementById("toast");e.textContent=msg;e.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>e.classList.remove("show"),2600)}
+async function api(url,opt={}){const r=await fetch(url,{headers:{"Content-Type":"application/json",...(opt.headers||{})},...opt});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||d.errors?.join("\n")||`HTTP ${r.status}`);return d}
+async function load(){try{state=await api("/api/accounts");render()}catch(e){toast("Database connection failed: "+e.message)}}
+function render(){const q=document.getElementById("search").value.trim().toLowerCase();let total=0,grand=0;for(const s of state){total+=s.accounts.length;grand+=sumServer(s)}document.getElementById("accountCount").textContent=total;document.getElementById("grandTotal").textContent=formatAmount(grand);document.getElementById("serverCount").textContent=state.length;document.getElementById("slotCount").textContent="∞";document.getElementById("servers").innerHTML=state.map(s=>{const visible=s.accounts.filter(a=>!q||a.username.toLowerCase().includes(q));return `<section class="server"><div class="server-head"><div><div class="server-title"><div class="server-name">${esc(s.name)}</div></div><div class="server-meta">${esc(s.range)} · ${s.accounts.length} account(s)</div></div><div class="server-total">${formatAmount(sumServer(s))}</div><div class="server-actions"><button class="btn" onclick="copyEverything('${s.id}')">📋 Copy Everything</button><button class="btn primary" onclick="addAccount()">＋ Add Account</button></div></div><div class="accounts">${visible.length?visible.map((a,i)=>accountHTML(s,a,i)).join(""):`<div class="empty">${q?"No matching accounts.":"No accounts in this server."}</div>`}</div></section>`}).join("")}
+function accountHTML(s,a,i){return `<div class="account"><div class="num">#${i+1}</div><div class="value">${esc(formatAmount(parseAmount(a.amount)))}</div><div class="cred"><div class="username">${esc(a.username)}</div><div class="password">${a._show?esc(a.password):"••••••••"}</div></div><div class="actions-small"><button class="small" onclick="togglePassword('${s.id}','${a.id}')">${a._show?"Hide":"Show"}</button><button class="small" onclick="copyAccount('${s.id}','${a.id}')">Copy</button><button class="small" onclick="editAccount('${s.id}','${a.id}')">Edit</button><button class="small red" onclick="removeAccount('${s.id}','${a.id}')">Remove</button></div></div>`}
+function openModal(title,body){document.getElementById("modalTitle").textContent=title;document.getElementById("modalBody").innerHTML=body;document.getElementById("modal").classList.add("open")}
+function closeModal(){document.getElementById("modal").classList.remove("open");editingId=null}
+function amountPreview(){const input=document.getElementById("amount"),box=document.getElementById("rangePreview");if(!input||!box)return;const s=getServerForAmount(parseAmount(input.value));if(!input.value.trim())box.innerHTML="Enter an amount to automatically determine the server.";else if(!s)box.innerHTML='<span style="color:#ff8585">Amount must be at least 1B.</span>';else box.innerHTML=`Automatically assigned to <b>${esc(s.name)}</b> <span style="color:#707785">(${esc(s.range)})</span>`}
+function addAccount(){editingId=null;openModal("Add Account",`<div class="field"><label>AMOUNT / GAME VALUE</label><input id="amount" placeholder="Example: 25B" oninput="amountPreview()"><div class="range-box" id="rangePreview">Enter an amount to automatically determine the server.</div></div><div class="field"><label>USERNAME</label><input id="username" placeholder="Roblox username"></div><div class="field"><label>PASSWORD</label><input id="password" type="password" placeholder="Password"></div><div class="help">Accepted units: K, M, B, T, Qa, Qi. Server ranges: 1B–100B, 101B–200B, 201B–500B, 501B+.</div><div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveNewAccount()">Add Account</button></div>`);setTimeout(()=>document.getElementById("amount")?.focus(),50)}
+async function saveNewAccount(){const amount=document.getElementById("amount").value.trim(),username=document.getElementById("username").value.trim(),password=document.getElementById("password").value;if(!Number.isFinite(parseAmount(amount))||parseAmount(amount)<1e9)return toast("Account value must be at least 1B.");if(!username||!password)return toast("Username and password are required.");try{await api("/api/accounts",{method:"POST",body:JSON.stringify({amount,username,password})});closeModal();await load();toast(`${username} added.`)}catch(e){toast(e.message)}}
+function editAccount(sid,id){const s=state.find(x=>x.id===sid),a=s?.accounts.find(x=>x.id===id);if(!a)return;editingId=id;openModal("Edit Account",`<div class="field"><label>AMOUNT / GAME VALUE</label><input id="amount" value="${esc(a.amount)}" oninput="amountPreview()"><div class="range-box" id="rangePreview">Current server: <b>${esc(s.name)}</b> (${esc(s.range)})</div></div><div class="field"><label>USERNAME</label><input id="username" value="${esc(a.username)}"></div><div class="field"><label>PASSWORD</label><input id="password" type="password" value="${esc(a.password)}"></div><div class="help">Changing the amount automatically moves the account to the correct server.</div><div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveAccountChanges()">Save Changes</button></div>`);setTimeout(amountPreview,50)}
+async function saveAccountChanges(){const amount=document.getElementById("amount").value.trim(),username=document.getElementById("username").value.trim(),password=document.getElementById("password").value;if(!Number.isFinite(parseAmount(amount))||parseAmount(amount)<1e9)return toast("Account value must be at least 1B.");if(!username||!password)return toast("Username and password are required.");try{await api(`/api/accounts/${editingId}`,{method:"PUT",body:JSON.stringify({amount,username,password})});closeModal();await load();toast("Account updated.")}catch(e){toast(e.message)}}
+async function removeAccount(sid,id){const s=state.find(x=>x.id===sid),a=s?.accounts.find(x=>x.id===id);if(!a||!confirm(`Remove ${a.username}?`))return;try{await api(`/api/accounts/${id}`,{method:"DELETE"});await load();toast("Account removed.")}catch(e){toast(e.message)}}
+function togglePassword(sid,id){const a=state.find(x=>x.id===sid)?.accounts.find(x=>x.id===id);if(a){a._show=!a._show;render()}}
+async function copyText(t){try{await navigator.clipboard.writeText(t)}catch{const x=document.createElement("textarea");x.value=t;document.body.appendChild(x);x.select();document.execCommand("copy");x.remove()}toast("Copied to clipboard.")}
+function accountLine(a){return `(${formatAmount(parseAmount(a.amount))}) ${a.username}:${a.password}`}
+function copyAccount(sid,id){const a=state.find(x=>x.id===sid)?.accounts.find(x=>x.id===id);if(a)copyText(accountLine(a))}
+function copyEverything(sid){const s=state.find(x=>x.id===sid);if(!s||!s.accounts.length)return toast("This server has no accounts.");copyServerId=sid;const text=s.accounts.map(accountLine).join("\n");openModal(`Copy Everything — ${s.name}`,`<div class="copybox"><div class="copy-preview">${esc(text)}</div><div class="form-actions"><button class="btn" onclick="closeModal()">Close</button><button class="btn primary" onclick="copyServerNow()">📋 Copy Everything</button></div></div>`)}
+function copyServerNow(){const s=state.find(x=>x.id===copyServerId);if(s)copyText(s.accounts.map(accountLine).join("\n"));closeModal()}
+function importData(){openModal("Import Accounts",`<div class="field"><label>DISCORD MESSAGE / ACCOUNT LINES</label><textarea id="importText" placeholder="(145B) user1:pass1 (114B) user2:pass2 (183B) user3:pass3\n\nOr one account per line."></textarea></div><div class="help">Supports multiple accounts on one Discord message. Format: (amount) username:password. Any malformed leftover text is rejected and reported.</div><div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="runImport()">Import Accounts</button></div>`)}
+async function runImport(){const text=document.getElementById("importText").value.trim();if(!text)return toast("Enter at least one account.");const re=/\(([^)]+)\)\s+([^\s:]+):([^\s]+)(?=\s+\(|$)/g;const matches=[...text.matchAll(re)];if(!matches.length)return toast("No valid account entries found.");let covered=Array(text.length).fill(false);for(const m of matches)for(let i=m.index;i<m.index+m[0].length;i++)covered[i]=true;const leftovers=text.split("").map((c,i)=>covered[i]?" ":c).join("").replace(/\s+/g," ").trim();if(leftovers)return toast("Invalid/unrecognized text: "+leftovers.slice(0,180));for(const m of matches){if(!Number.isFinite(parseAmount(m[1]))||parseAmount(m[1])<1e9)return toast(`${m[2]}: amount must be at least 1B.`)}try{for(const m of matches)await api("/api/accounts",{method:"POST",body:JSON.stringify({amount:m[1].trim(),username:m[2].trim(),password:m[3].trim()})});closeModal();await load();toast(`${matches.length} account(s) imported and sorted automatically.`)}catch(e){toast(e.message)}}
+document.getElementById("search").addEventListener("input",render);document.getElementById("modal").addEventListener("click",e=>{if(e.target.id==="modal")closeModal()});
+load();refreshTimer=setInterval(load,5000);
+</script>
+</script>
+</body>
+</html>
